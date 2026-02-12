@@ -1,0 +1,24 @@
+name: Website Deployment
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: npm ci
+
+      - name: Run tests
+        id: run-tests
+        run: npm run test || exit 1  # will fail if tests fail
+
+      - name: Upload test report on failure
+        if: steps.run-tests.outcome == 'failure'   # ✅ runs only if tests fail
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: test.json
+
