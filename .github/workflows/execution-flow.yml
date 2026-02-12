@@ -1,31 +1,101 @@
-test:
-  runs-on: ubuntu-latest
-  steps:
-    - name: Get code
-      uses: actions/checkout@v3
+name: Website Deployment
 
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.npm
-        key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+on:
+  push:
+    branches:
+      - master
 
-    - name: Install dependencies
-      run: npm ci
+jobs:
 
-    - name: Test code
-      id: run-tests
-      run: npm run test
-      continue-on-error: true   # 👈 VERY IMPORTANT
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get code
+        uses: actions/checkout@v3
 
-    - name: Upload test report
-      if: steps.run-tests.outcome == 'failure'
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-report
-        path: test.json
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
 
-    - name: Fail job if tests failed
-      if: steps.run-tests.outcome == 'failure'
-      run: exit 1
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint code
+        run: npm run lint || true
+
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get code
+        uses: actions/checkout@v3
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        id: run-tests
+        run: npm run test
+        continue-on-error: true   # allow next steps to run
+
+      - name: Upload test report (only if failed)
+        if: steps.run-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: test.json
+
+      - name: Fail job if tests failed
+        if: steps.run-tests.outcome == 'failure'
+        run: exit 1
+
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get code
+        uses: actions/checkout@v3
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build website
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-files
+          path: dist
+
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: dist-files
+
+      - name: Output contents
+        run: ls -R
+
+      - name: Deploy
+        run: echo "Deploying..."
 
