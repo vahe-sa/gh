@@ -3,51 +3,84 @@ name: Website Deployment
 on:
   push:
     branches:
-      - master
+      - main   # 🔁 change to master if your branch is master
 
 jobs:
 
   lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Get code
+      - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint code
+      - name: Run linter
         run: npm run lint || true
 
 
-test:
-  runs-on: ubuntu-latest
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+  test:
+    runs-on: ubuntu-latest
 
-    - name: Install dependencies
-      run: npm ci
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Run tests
-      id: run-tests
-      run: npm run test
-      continue-on-error: true
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Upload test report if tests failed
-      if: steps.run-tests.outcome == 'failure'
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-report
-        path: test.json
+      - name: Run tests
+        id: run-tests
+        run: npm run test
+        continue-on-error: true   # 🔥 allow upload step to run
 
-    - name: Fail job if tests failed
-      if: steps.run-tests.outcome == 'failure'
-      run: exit 1
+      - name: Upload test report (only if tests failed)
+        if: steps.run-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: test.json   # ⚠️ make sure this file exists
+
+      - name: Fail job if tests failed
+        if: steps.run-tests.outcome == 'failure'
+        run: exit 1
+
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-files
+          path: dist
+
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: dist-files
+
+      - name: Show files
+        run: ls -R
+
+      - name: Deploy
+        run: echo "Deploying..."
 
